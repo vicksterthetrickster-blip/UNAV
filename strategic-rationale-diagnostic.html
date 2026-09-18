@@ -1,0 +1,74 @@
+<div id="deal-rationale-diagnostic">
+  <style>
+    #deal-rationale-diagnostic { color: var(--foreground); font-size: var(--font-size-base); }
+    #deal-rationale-diagnostic .header { display:flex; justify-content:space-between; align-items:baseline; gap:16px; flex-wrap:wrap; margin-bottom:16px; }
+    #deal-rationale-diagnostic .scoreline { display:flex; align-items:baseline; gap:8px; }
+    #deal-rationale-diagnostic .overall { font-size:2rem; font-weight:500; }
+    #deal-rationale-diagnostic .dimension { margin: 18px 0; }
+    #deal-rationale-diagnostic .dimension-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:6px; }
+    #deal-rationale-diagnostic .dimension-score { font-weight:500; white-space:nowrap; }
+    #deal-rationale-diagnostic .rating { width:72px; }
+    #deal-rationale-diagnostic textarea { min-height:54px; width:100%; box-sizing:border-box; resize:vertical; }
+    #deal-rationale-diagnostic .feedback { margin-top:20px; }
+    #deal-rationale-diagnostic .feedback ul { margin:8px 0 0; padding-left:20px; }
+    #deal-rationale-diagnostic .feedback li { margin:5px 0; }
+    #deal-rationale-diagnostic .status { font-weight:500; }
+    @media (max-width: 520px) { #deal-rationale-diagnostic .table-responsive { font-size: 13px; } #deal-rationale-diagnostic .rating { width:62px; } }
+  </style>
+  <div class="header">
+    <div>
+      <h2>Strategic rationale diagnostic</h2>
+      <div class="text-muted">Rate each statement: 1 = unsupported · 3 = plausible · 5 = evidenced and aligned</div>
+    </div>
+    <div class="scoreline" aria-live="polite"><span class="text-muted">Rationale strength</span><span class="overall tabular-nums" id="overallScore">—</span><span class="status" id="overallLabel">Start scoring</span></div>
+  </div>
+  <div id="dimensions"></div>
+  <div class="feedback card" aria-live="polite">
+    <div class="text-muted">Diagnostic readout</div>
+    <div id="feedbackText">Rate the statements to surface the assumptions that need the most work.</div>
+  </div>
+  <script>
+  (() => {
+    const root = document.getElementById('deal-rationale-diagnostic');
+    const data = [
+      {name:'Strategic fit', items:['The target strengthens a priority market, capability, or customer segment in our stated strategy.','The combination creates a defensible position that we could not readily build organically.','The target’s customers, channels, and operating model fit the acquiring company’s strategic direction.']},
+      {name:'Value creation logic', items:['The value drivers are explicit, quantified, and linked to a credible owner and timeline.','Revenue synergies rely on specific customer, product, or channel mechanisms—not broad cross-sell assumptions.','Cost, capital, or capability benefits remain compelling after integration costs and dis-synergies.']},
+      {name:'Alternatives considered', items:['Build, partner, minority investment, and other targets were assessed against this acquisition.','This target is preferred for clear reasons beyond availability, relationship, or momentum.','The rationale still holds if the price rises or terms become less favorable.']},
+      {name:'Timing and market context', items:['The deal window is tied to a real market inflection, competitive move, or time-sensitive opportunity.','Current market conditions improve the odds of realizing the thesis rather than merely creating urgency.','Waiting 12–24 months would create a specific, material disadvantage.']},
+      {name:'Executive sponsorship and alignment', items:['The CEO and relevant business leaders share the same definition of success for the deal.','An accountable executive sponsor has committed people, budget, and decision rights for integration.','Key leaders acknowledge the trade-offs and unresolved assumptions rather than offering generic support.']},
+      {name:'Risk to the thesis', items:['The few assumptions that could break the investment case are named, testable, and tracked.','Downside cases show the deal remains acceptable—or specify a clear walk-away condition.','Regulatory, cultural, talent, customer, and execution risks have practical mitigations with owners.']}
+    ];
+    const dimensions = root.querySelector('#dimensions');
+    const options = ['<option value="">—</option>','<option value="1">1</option>','<option value="2">2</option>','<option value="3">3</option>','<option value="4">4</option>','<option value="5">5</option>'].join('');
+    dimensions.innerHTML = data.map((d, i) => `<section class="dimension" data-index="${i}"><div class="dimension-head"><h3>${d.name}</h3><span class="dimension-score tabular-nums">Score: <span id="score-${i}">—</span></span></div><div class="table-responsive"><table class="table table-sm"><thead><tr><th scope="col">Pointed test</th><th scope="col" class="text-end">Rating</th></tr></thead><tbody>${d.items.map((item,j)=>`<tr><td><label for="rate-${i}-${j}">${item}</label></td><td class="text-end"><select id="rate-${i}-${j}" class="form-select rating" aria-label="${d.name}, statement ${j+1}">${options}</select></td></tr>`).join('')}</tbody></table></div><label class="form-label" for="note-${i}">Evidence or doubts</label><textarea class="form-control" id="note-${i}" placeholder="Source, owner, counter-evidence, or question to resolve"></textarea></section>`).join('<hr>');
+    const overallScore = root.querySelector('#overallScore'), overallLabel = root.querySelector('#overallLabel'), feedback = root.querySelector('#feedbackText');
+    function update() {
+      const results = data.map((d,i) => {
+        const vals = d.items.map((_,j) => Number(root.querySelector(`#rate-${i}-${j}`).value)).filter(Boolean);
+        const score = vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
+        root.querySelector(`#score-${i}`).textContent = score ? `${score.toFixed(1)} / 5` : '—';
+        return {...d, score, vals};
+      });
+      const completed = results.reduce((n,r)=>n+r.vals.length,0);
+      const scored = results.filter(r=>r.score);
+      const overall = scored.length ? scored.reduce((n,r)=>n+r.score,0)/scored.length : null;
+      overallScore.textContent = overall ? `${overall.toFixed(1)} / 5` : '—';
+      const label = !overall ? 'Start scoring' : overall >= 4.2 ? 'Strong case' : overall >= 3.4 ? 'Promising, but pressure-test' : overall >= 2.5 ? 'Material gaps' : 'Thesis at risk';
+      overallLabel.textContent = label;
+      if (!completed) { feedback.textContent = 'Rate the statements to surface the assumptions that need the most work.'; return; }
+      const weak = results.filter(r=>r.score && r.score < 3.5).sort((a,b)=>a.score-b.score);
+      const incomplete = results.filter(r=>r.vals.length < 3);
+      let html = `<strong>${completed}/18 tests rated.</strong> `;
+      if (weak.length) {
+        html += '<ul>' + weak.map(r => { const low = r.vals.filter(v=>v<=2).length; const message = r.name === 'Value creation logic' ? 'The case needs quantified drivers, named owners, and an integration-adjusted view of value.' : r.name === 'Alternatives considered' ? 'Validate why buying now beats building, partnering, or walking away at a higher price.' : r.name === 'Risk to the thesis' ? 'Name the few break-the-case assumptions and set evidence thresholds or walk-away triggers.' : r.name === 'Executive sponsorship and alignment' ? 'Confirm shared success criteria, decision rights, and committed integration capacity.' : r.name === 'Timing and market context' ? 'Separate a real window of opportunity from deal momentum or fear of missing out.' : 'Make the strategic link concrete: what priority changes, why this target, and why organic action cannot deliver it.'; return `<li><strong>${r.name} (${r.score.toFixed(1)}/5):</strong> ${message}${low ? ` ${low} test${low>1?'s are':' is'} currently unsupported.` : ''}</li>`; }).join('') + '</ul>';
+      } else if (scored.length === 6) html += 'No dimension is below the pressure-test threshold. Use the notes to challenge the strongest assumptions before advancing.';
+      else html += 'Finish the remaining dimensions before relying on the overall score.';
+      if (incomplete.length) html += `<div class="text-muted text-small">Still incomplete: ${incomplete.map(r=>r.name).join(', ')}.</div>`;
+      feedback.innerHTML = html;
+    }
+    root.addEventListener('input', update);
+    root.addEventListener('change', update);
+  })();
+  </script>
+</div>
+
